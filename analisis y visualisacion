@@ -1,0 +1,245 @@
+# -----------------------------------------------------------------------------
+# Script de Análisis Exploratorio de Datos (EDA) para Ganancias de Freelancers
+# -----------------------------------------------------------------------------
+
+# --- 1. Importación de Bibliotecas ---
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os # Para manejar rutas de archivos
+
+print("--> Iniciando script de Análisis Exploratorio...")
+
+# --- 2. Configuración de Rutas ---
+# ¡IMPORTANTE! Reemplaza estas rutas con las correctas para tu sistema o usa rutas relativas.
+# Se asume que el script se ejecuta desde la raíz del proyecto 'freelancer_analysis/'
+# y que los datos están en 'data/' y la salida va a 'output/'
+
+# Ruta al archivo CSV de entrada
+csv_input_path = "data/freelancer_earnings_bd.csv"
+# csv_input_path = "/ruta/absoluta/si/prefieres/freelancer_earnings_bd.csv" # Alternativa
+
+# Directorio para guardar las gráficas
+output_graphics_dir = "output/graficas"
+# output_graphics_dir = "/ruta/absoluta/si/prefieres/output/graficas" # Alternativa
+
+# Ruta para guardar el archivo CSV de indicadores
+output_indicators_csv = "output/indicadores_calculados.csv"
+# output_indicators_csv = "/ruta/absoluta/si/prefieres/output/indicadores_calculados.csv" # Alternativa
+
+# Crear directorios de salida si no existen
+os.makedirs(output_graphics_dir, exist_ok=True)
+
+# --- 3. Carga y Limpieza de Datos ---
+print(f"--> Cargando datos desde: {csv_input_path}")
+try:
+    df = pd.read_csv(csv_input_path)
+    print("    Datos cargados exitosamente.")
+except FileNotFoundError:
+    print(f"Error: No se encontró el archivo en {csv_input_path}. Verifica la ruta.")
+    exit() # Termina el script si no se encuentra el archivo
+
+print("--> Mostrando las primeras 5 filas del DataFrame:")
+print(df.head())
+
+print("--> Información inicial del DataFrame (tipos de datos, no nulos):")
+df.info()
+
+print(f"--> Número de filas antes de eliminar nulos: {len(df)}")
+# Eliminar filas con cualquier valor nulo
+# Considera usar df.fillna() si prefieres imputar valores
+df = df.dropna()
+print(f"--> Número de filas después de eliminar nulos: {len(df)}")
+
+print("--> Columnas disponibles después de la limpieza:")
+print(df.columns)
+
+print("--> Verificación de tipos de datos después de la limpieza:")
+print(df.dtypes)
+
+print("--> Estadísticas descriptivas generales:")
+print(df.describe())
+
+# --- 4. Cálculo de Indicadores Clave ---
+# Se asume que las columnas existen con estos nombres. ¡Ajusta si es necesario!
+print("--> Calculando indicadores clave...")
+
+# - Ingreso promedio por país
+#   (Asume columnas 'pais' y 'ingresos_promedio')
+try:
+    ingresos_promedio_pais = df.groupby("pais")["ingresos_promedio"].mean().sort_values(ascending=False)
+    print("\n--- Ingreso Promedio por País ---")
+    print(ingresos_promedio_pais)
+except KeyError:
+    print("Error: No se encontraron las columnas 'pais' o 'ingresos_promedio'.")
+    ingresos_promedio_pais = pd.Series(dtype=float) # Crear Series vacía para evitar errores posteriores
+
+# - Ingresos promedio por región
+#   (Asume columnas 'region' y 'ingresos_promedio')
+try:
+    ingresos_promedio_region = df.groupby("region")["ingresos_promedio"].mean().sort_values(ascending=False)
+    print("\n--- Ingreso Promedio por Región ---")
+    print(ingresos_promedio_region)
+except KeyError:
+    print("Error: No se encontraron las columnas 'region' o 'ingresos_promedio'.")
+    ingresos_promedio_region = pd.Series(dtype=float)
+
+# - Duración promedio por tipo de proyecto
+#   (Asume columnas 'tipo_proyecto' y 'duracion_dias')
+try:
+    duracion_promedio = df.groupby("tipo_proyecto")["duracion_dias"].mean().sort_values(ascending=False)
+    print("\n--- Duración Promedio por Tipo de Proyecto (días) ---")
+    print(duracion_promedio)
+except KeyError:
+    print("Error: No se encontraron las columnas 'tipo_proyecto' o 'duracion_dias'.")
+    duracion_promedio = pd.Series(dtype=float)
+
+# - Tarifa promedio por Nivel de Experiencia (por hora)
+#   (Asume columnas 'Experience_Level' y 'Hourly_Rate')
+try:
+    tarifas_por_experiencia = df.groupby("Experience_Level")["Hourly_Rate"].mean().sort_values(ascending=False)
+    print("\n--- Tarifa Promedio por Nivel de Experiencia (USD/hora) ---")
+    print(tarifas_por_experiencia)
+except KeyError:
+    print("Error: No se encontraron las columnas 'Experience_Level' o 'Hourly_Rate'.")
+    tarifas_por_experiencia = pd.Series(dtype=float)
+
+# - Calificación promedio por categoría de trabajo
+#   (Asume columnas 'Job_Category' y 'Client_Rating')
+try:
+    calificacion_promedio = df.groupby("Job_Category")["Client_Rating"].mean().sort_values(ascending=False)
+    print("\n--- Calificación Promedio por Categoría de Trabajo ---")
+    print(calificacion_promedio)
+except KeyError:
+    print("Error: No se encontraron las columnas 'Job_Category' o 'Client_Rating'.")
+    calificacion_promedio = pd.Series(dtype=float)
+
+# - Experiencia promedio (años) por país
+#   (Asume columnas 'pais' y 'Experience_Years')
+try:
+    experiencia_promedio_pais = df.groupby("pais")["Experience_Years"].mean().sort_values(ascending=False)
+    print("\n--- Años de Experiencia Promedio por País ---")
+    print(experiencia_promedio_pais)
+except KeyError:
+    print("Error: No se encontraron las columnas 'pais' o 'Experience_Years'.")
+    experiencia_promedio_pais = pd.Series(dtype=float)
+
+
+# --- 5. Generación de Gráficas ---
+print(f"\n--> Generando y guardando gráficas en: {output_graphics_dir}")
+
+# - Gráfica: Ingreso promedio por país
+try:
+    if not ingresos_promedio_pais.empty:
+        plt.figure(figsize=(12, 7)) # Ajusta tamaño si hay muchos países
+        sns.barplot(x=ingresos_promedio_pais.index, y=ingresos_promedio_pais.values, palette="viridis")
+        plt.title("Ingresos Promedio por País")
+        plt.xlabel("País")
+        plt.ylabel("Ingresos Promedio (USD)")
+        plt.xticks(rotation=60, ha='right') # Mejor rotación para nombres largos
+        plt.tight_layout() # Ajusta para que no se solapen etiquetas
+        plt.savefig(os.path.join(output_graphics_dir, "ingresos_promedio_pais.png"))
+        plt.close() # Cierra la figura para liberar memoria
+        print("    Gráfica 'ingresos_promedio_pais.png' guardada.")
+except Exception as e:
+    print(f"Error al generar gráfica de Ingreso por País: {e}")
+
+# - Gráfica: Ingreso promedio por región
+try:
+    if not ingresos_promedio_region.empty:
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x=ingresos_promedio_region.index, y=ingresos_promedio_region.values, palette="plasma")
+        plt.title("Ingresos Promedio por Región")
+        plt.xlabel("Región")
+        plt.ylabel("Ingresos Promedio (USD)")
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_graphics_dir, "ingresos_promedio_region.png"))
+        plt.close()
+        print("    Gráfica 'ingresos_promedio_region.png' guardada.")
+except Exception as e:
+    print(f"Error al generar gráfica de Ingreso por Región: {e}")
+
+# - Gráfica: Freelancers mejor pagados (Tarifa promedio por hora por Nivel de Experiencia)
+try:
+    if not tarifas_por_experiencia.empty:
+        plt.figure(figsize=(10, 6))
+        # Ordenar niveles de experiencia si es posible (ej: Básico, Intermedio, Experto)
+        # experience_order = ['Beginner', 'Intermediate', 'Expert'] # Ajusta según tus datos
+        # sns.barplot(x=tarifas_por_experiencia.index, y=tarifas_por_experiencia.values, palette="mako", order=experience_order)
+        sns.barplot(x=tarifas_por_experiencia.index, y=tarifas_por_experiencia.values, palette="mako") # Sin orden específico
+        plt.title("Tarifa Promedio por Nivel de Experiencia")
+        plt.xlabel("Nivel de Experiencia")
+        plt.ylabel("Tarifa Promedio (USD/hora)")
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_graphics_dir, "tarifa_experiencia.png"))
+        plt.close()
+        print("    Gráfica 'tarifa_experiencia.png' guardada.")
+except Exception as e:
+    print(f"Error al generar gráfica de Tarifa por Experiencia: {e}")
+
+# - Gráfica: Calificación promedio por categoría de trabajo
+try:
+    if not calificacion_promedio.empty:
+        plt.figure(figsize=(12, 7)) # Ajusta tamaño si hay muchas categorías
+        sns.barplot(x=calificacion_promedio.index, y=calificacion_promedio.values, palette="coolwarm")
+        plt.title("Calificación Promedio por Categoría de Trabajo")
+        plt.xlabel("Categoría")
+        plt.ylabel("Calificación Promedio")
+        plt.xticks(rotation=60, ha='right')
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_graphics_dir, "calificacion_categoria.png"))
+        plt.close()
+        print("    Gráfica 'calificacion_categoria.png' guardada.")
+except Exception as e:
+    print(f"Error al generar gráfica de Calificación por Categoría: {e}")
+
+# --- 6. Exportación de Indicadores Calculados ---
+print(f"\n--> Exportando indicadores calculados a: {output_indicators_csv}")
+
+# Consolidar indicadores calculados (Series) en un DataFrame.
+# Usamos pd.DataFrame directamente sobre el diccionario; pd manejará las Series.
+# Nota: Esto puede resultar en muchas columnas NaN si los índices (país, región, etc.) no coinciden.
+# Una mejor aproximación podría ser guardar cada indicador en un archivo separado o en hojas distintas de un Excel.
+# O reestructurar los datos antes de guardar.
+
+# Por simplicidad, creamos un DataFrame donde cada columna es un indicador.
+# Los índices de las Series originales se perderán a menos que se manejen explícitamente.
+# Guardaremos cada Serie como una columna, lo que es más útil si los índices son diferentes.
+
+try:
+    # Convertimos cada Serie a DataFrame con un nombre de columna adecuado y luego concatenamos
+    df_indicadores_list = []
+    if not ingresos_promedio_pais.empty:
+        df_indicadores_list.append(ingresos_promedio_pais.reset_index().rename(columns={'index': 'Pais', 'ingresos_promedio': 'Ingreso_Promedio_Pais'}))
+    if not ingresos_promedio_region.empty:
+        df_indicadores_list.append(ingresos_promedio_region.reset_index().rename(columns={'index': 'Region', 'ingresos_promedio': 'Ingreso_Promedio_Region'}))
+    if not duracion_promedio.empty:
+        df_indicadores_list.append(duracion_promedio.reset_index().rename(columns={'index': 'Tipo_Proyecto', 'duracion_dias': 'Duracion_Promedio_Dias'}))
+    if not tarifas_por_experiencia.empty:
+        df_indicadores_list.append(tarifas_por_experiencia.reset_index().rename(columns={'index': 'Nivel_Experiencia', 'Hourly_Rate': 'Tarifa_Promedio_Hora'}))
+    if not calificacion_promedio.empty:
+        df_indicadores_list.append(calificacion_promedio.reset_index().rename(columns={'index': 'Categoria_Trabajo', 'Client_Rating': 'Calificacion_Promedio'}))
+    if not experiencia_promedio_pais.empty:
+        df_indicadores_list.append(experiencia_promedio_pais.reset_index().rename(columns={'index': 'Pais_Exp', 'Experience_Years': 'Experiencia_Promedio_Anos'}))
+
+    # Guardar cada indicador en un archivo CSV separado para mayor claridad
+    for df_ind in df_indicadores_list:
+        # Extrae el nombre de la segunda columna para usarlo en el nombre del archivo
+        indicator_name = df_ind.columns[1]
+        file_name = f"indicador_{indicator_name.lower()}.csv"
+        output_path = os.path.join(os.path.dirname(output_indicators_csv), file_name) # Guarda en la misma carpeta 'output'
+        df_ind.to_csv(output_path, index=False)
+        print(f"    Indicador '{indicator_name}' guardado en '{output_path}'")
+
+    # (Opcional) Si aún quieres un único CSV combinado (puede ser ancho y con NaNs)
+    # df_indicadores_combinado = pd.concat(df_indicadores_list, axis=1)
+    # df_indicadores_combinado.to_csv(output_indicators_csv, index=False)
+    # print(f"    DataFrame combinado guardado en '{output_indicators_csv}' (puede contener NaNs)")
+
+except Exception as e:
+    print(f"Error al exportar indicadores a CSV: {e}")
+
+
+print("\n--> Script de Análisis Exploratorio finalizado.")
