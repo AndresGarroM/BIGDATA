@@ -1,0 +1,99 @@
+# -----------------------------------------------------------------------------
+# Script Productor Kafka para Simular Datos de Freelancers
+# -----------------------------------------------------------------------------
+
+# --- 1. Importación de Bibliotecas ---
+import time
+import json
+import random
+from kafka import KafkaProducer
+from kafka.errors import NoBrokersAvailable
+
+# --- 2. Datos de Ejemplo para Generación Aleatoria ---
+# Listas basadas en los campos potenciales del dataset o categorías comunes
+job_categories = ["Web Development", "Graphic Design", "Data Analysis", "Digital Marketing", "Content Writing", "Translation"]
+platforms = ["Upwork", "Fiverr", "Freelancer", "Toptal", "Guru"]
+experience_levels = ["Beginner", "Intermediate", "Expert", "Top Rated"]
+regions = ["North America", "Europe", "Asia", "South America", "Africa", "Oceania"]
+payment_methods = ["PayPal", "Bank Transfer", "Crypto", "Payoneer"]
+project_types = ["Fixed", "Hourly"]
+
+# --- 3. Función para Generar Datos Aleatorios ---
+def generate_freelancer_data():
+    """
+    Genera un diccionario representando un registro de datos de freelancer
+    con valores aleatorios.
+    """
+    return {
+        "Freelancer_ID": random.randint(1000, 9999),
+        "Job_Category": random.choice(job_categories),
+        "Platform": random.choice(platforms),
+        "Experience_Level": random.choice(experience_levels),
+        "Client_Region": random.choice(regions), # Renombrado para claridad (era 'region' antes)
+        "Payment_Method": random.choice(payment_methods),
+        "Job_Completed": random.randint(1, 150), # Aumentado el rango
+        "Earnings_USD": random.randint(50, 15000), # Rango más amplio
+        "Hourly_Rate": round(random.uniform(10, 150), 2), # Rango más amplio
+        "Job_Success_Rate": round(random.uniform(70, 100), 2), # Rango más realista
+        "Client_Rating": round(random.uniform(3.5, 5.0), 2), # Rango más realista
+        "Job_Duration_Days": random.randint(1, 90), # Duración de trabajo
+        "Project_Type": random.choice(project_types),
+        "Rehire_Rate": round(random.uniform(10, 90), 2), # Tasa de recontratación
+        "Marketing_Spend": random.randint(0, 1000), # Gasto en marketing
+        "Timestamp": time.time() # Añadir timestamp para posible análisis temporal
+    }
+
+# --- 4. Configuración del Productor Kafka ---
+KAFKA_BROKER = 'localhost:9092'
+KAFKA_TOPIC = 'freelancer_data'
+
+print(f"--> Intentando conectar al Broker Kafka en: {KAFKA_BROKER}")
+
+try:
+    # Inicializar el productor Kafka
+    # - bootstrap_servers: Lista de brokers Kafka a los que conectarse.
+    # - value_serializer: Función para convertir el valor del mensaje (nuestro diccionario)
+    #                     a bytes. Aquí, lo convertimos a JSON y luego lo codificamos a UTF-8.
+    producer = KafkaProducer(
+        bootstrap_servers=[KAFKA_BROKER],
+        value_serializer=lambda x: json.dumps(x).encode('utf-8'),
+        retries=5, # Intentar reconectar si falla inicialmente
+        request_timeout_ms=30000 # Tiempo de espera para la respuesta del broker
+    )
+    print("    Conexión con Kafka establecida exitosamente.")
+
+    # --- 5. Bucle Principal de Envío de Datos ---
+    print(f"--> Iniciando envío de datos al topic: {KAFKA_TOPIC}")
+    print("    (Presiona Ctrl+C para detener)")
+
+    while True:
+        # Generar un nuevo registro de datos
+        freelancer_data = generate_freelancer_data()
+
+        # Enviar el registro al topic de Kafka
+        # - producer.send(topic, value): Envía el mensaje. 'value' es el contenido.
+        future = producer.send(KAFKA_TOPIC, value=freelancer_data)
+
+        # (Opcional) Manejar confirmación o errores de envío
+        try:
+            record_metadata = future.get(timeout=10)
+            # print(f"    Mensaje enviado a topic '{record_metadata.topic}' partition {record_metadata.partition} offset {record_metadata.offset}")
+            print(f"    Enviado: {freelancer_data['Freelancer_ID']} - {freelancer_data['Job_Category']} - {freelancer_data['Earnings_USD']} USD")
+        except Exception as e:
+            print(f"Error al enviar mensaje: {e}")
+
+        # Esperar 1 segundo antes de enviar el siguiente mensaje
+        time.sleep(1)
+
+except NoBrokersAvailable:
+    print(f"Error: No se pudo conectar a ningún broker Kafka en {KAFKA_BROKER}.")
+    print("Asegúrate de que Kafka esté corriendo y accesible.")
+except Exception as e:
+    print(f"Ocurrió un error inesperado: {e}")
+finally:
+    # Cerrar el productor al terminar (aunque en un bucle infinito, esto se alcanzaría con Ctrl+C)
+    if 'producer' in locals() and producer:
+        print("\n--> Cerrando productor Kafka...")
+        producer.flush() # Asegura que todos los mensajes pendientes se envíen
+        producer.close()
+        print("    Productor cerrado.")
