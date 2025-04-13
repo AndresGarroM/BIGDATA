@@ -1,0 +1,108 @@
+# -----------------------------------------------------------------------------
+# Script Consumidor Spark Streaming para Procesar Datos de Freelancers desde Kafka
+# -----------------------------------------------------------------------------
+
+# --- 1. Importación de Bibliotecas ---
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import from_json, col, avg, window # Añadido 'window' por si se usa en el futuro
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType, TimestampType
+
+# --- 2. Crear la Sesión de Spark ---
+print("--> Creando Spark Session...")
+spark = SparkSession.builder \
+    .appName("KafkaFreelancerStreaming") \
+    # .master("local[*]") # Descomenta si ejecutas localmente fuera de spark-submit
+    .getOrCreate()
+
+# Establecer nivel de log a WARN para reducir la verbosidad
+spark.sparkContext.setLogLevel("WARN")
+print("    Spark Session creada.")
+
+# --- 3. Definir el Esquema de los Datos ---
+# Debe coincidir exactamente con la estructura del JSON enviado por el productor Kafka
+print("--> Definiendo el esquema para los datos JSON...")
+schema = StructType([
+    StructField("Freelancer_ID", IntegerType(), True),
+    StructField("Job_Category", StringType(), True),
+    StructField("Platform", StringType(), True),
+    StructField("Experience_Level", StringType(), True),
+    StructField("Client_Region", StringType(), True),
+    StructField("Payment_Method", StringType(), True),
+    StructField("Job_Completed", IntegerType(), True),
+    StructField("Earnings_USD", IntegerType(), True), # Podría ser DoubleType si hay decimales
+    StructField("Hourly_Rate", DoubleType(), True),
+    StructField("Job_Success_Rate", DoubleType(), True),
+    StructField("Client_Rating", DoubleType(), True),
+    StructField("Job_Duration_Days", IntegerType(), True),
+    StructField("Project_Type", StringType(), True),
+    StructField("Rehire_Rate", DoubleType(), True),
+    StructField("Marketing_Spend", IntegerType(), True),
+    StructField("Timestamp", DoubleType(), True) # El timestamp de Python es float, se puede castear luego
+])
+print("    Esquema definido.")
+
+# --- 4. Configuración de la Fuente Kafka ---
+KAFKA_BROKER = "localhost:9092"
+KAFKA_TOPIC = "freelancer_data"
+
+print(f"--> Configurando lectura desde Kafka: Broker={KAFKA_BROKER}, Topic={KAFKA_TOPIC}")
+# Leer datos como un stream desde Kafka
+raw_df = spark.readStream \
+    .format("kafka") \
+    .option("kafka.bootstrap.servers", KAFKA_BROKER) \
+    .option("subscribe", KAFKA_TOPIC) \
+    .option("startingOffsets", "latest") \
+    .load() # Lee los datos crudos (key, value, topic, partition, offset, timestamp, timestampType)
+
+print("    Stream de Kafka configurado.")
+
+# --- 5. Parsear los Datos JSON ---
+print("--> Parseando los mensajes JSON desde la columna 'value'...")
+# Kafka entrega los mensajes como bytes en la columna 'value'.
+# 1. Castear 'value' a STRING.
+# 2. Usar from_json para parsear el string JSON usando el esquema definido.
+# 3. Seleccionar los campos parseados del struct resultante.
+parsed_df = raw_df \
+    .select(from_json(col("value").cast("string"), schema).alias("data")) \
+    .select("data.*")
+
+# Opcional: Convertir timestamp a tipo Timestamp de Spark
+# parsed_df = parsed_df.withColumn("event_time", (col("Timestamp")).cast(TimestampType()))
+
+print("    Parseo configurado.")
+
+# --- 6. Definir el Análisis en Streaming ---
+# Ejemplo: Calcular ganancias, tarifa y calificación promedio, agrupando por región del cliente y plataforma.
+# Esta agregación se actualizará a medida que lleguen nuevos datos.
+print("--> Definiendo la agregación en streaming...")
+agg_df = parsed_df.groupBy(
+    col("Client_Region"),
+    col("Platform")
+    # Opcional: Agrupar por ventana de tiempo si añadiste 'event_time'
+    # window(col("event_time"), "10 minutes", "5 minutes") # Ventana de 10 min, actualiza cada 5 min
+).agg(
+    avg("Earnings_USD").alias("Avg_Earnings_USD"),
+    avg("Hourly_Rate").alias("Avg_Hourly_Rate"),
+    avg("Client_Rating").alias("Avg_Client_Rating")
+).orderBy("Client_Region", "Platform") # Ordenar para mejor visualización
+
+print("    Agregación definida.")
+
+# --- 7. Configurar la Salida (Sink) ---
+# En este caso, mostraremos los resultados agregados en la consola.
+print("--> Configurando la salida a la consola...")
+query = agg_df.writeStream \
+    .outputMode("complete") \
+    .format("console") \
+    .option("truncate", "false") \
+    .option("numRows", 50) \
+    .start() # Iniciar la consulta en segundo plano
+
+print("--> Consulta de streaming iniciada. Mostrando resultados en consola...")
+print("    (Presiona Ctrl+C para detener el script Spark)")
+
+# --- 8. Esperar a que la Consulta Termine ---
+# La consulta se ejecutará hasta que se detenga manualmente (Ctrl+C) o falle.
+query.awaitTermination()
+
+print("--> Consulta de streaming terminada.")
